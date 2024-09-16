@@ -1,0 +1,6 @@
+fastapi
+pandas==2.0.2
+uvicorn
+requests
+numpy==1.24.1
+influxdb-client

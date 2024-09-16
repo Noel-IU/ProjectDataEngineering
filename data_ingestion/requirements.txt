@@ -1,0 +1,6 @@
+kafka-python
+pandas==2.0.2
+influxdb-client
+fastapi
+uvicorn
+numpy==1.24.1

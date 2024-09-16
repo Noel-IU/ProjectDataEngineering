@@ -1,0 +1,121 @@
+# Here we define all the services for our real-time data pipeline
+
+services:
+
+  # This is the Zookeeper service for Kafka coordination
+  zookeeper:
+    image: wurstmeister/zookeeper  # Using wurstmeister's Zookeeper image
+    ports:
+      - "2181:2181"  # Exposing port 2181 for Zookeeper communication
+    networks:
+      - kafka-net  # Connecting Zookeeper to the custom 'kafka-net' network
+
+  # This is the Kafka broker service for handling the messaging system
+  kafka:
+    image: wurstmeister/kafka  # Using wurstmeister's Kafka image
+    ports:
+      - "9092:9092"  # Exposing port 9092 for Kafka communication
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181  # Connect Kafka to Zookeeper at port 2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092  # Advertise Kafka listener
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092  # Set up Kafka listeners
+    depends_on:
+      - zookeeper  # Kafka depends on Zookeeper
+    networks:
+      - kafka-net  # Connect Kafka to the custom 'kafka-net' network
+
+  # This is the Data Ingestion Service
+  data_ingestion:
+    build:
+      context: ./data_ingestion  # Specify the build context for our Dockerfile
+      dockerfile: Dockerfile  # Define the Dockerfile location
+    volumes:
+      - ./data_ingestion:/app  # Mount the data_ingestion directory to the container
+    environment:
+      KAFKA_BROKER: kafka:9092  # Set Kafka broker to communicate with Kafka on port 9092
+      INFLUXDB_URL: http://influxdb:8086  # Set InfluxDB URL for data storage
+      INFLUXDB_TOKEN: ...  # This is the token to authenticate InfluxDB
+      INFLUXDB_ORG: myorg  # InfluxDB organization name
+      INFLUXDB_BUCKET: mybucket  # InfluxDB bucket to store the data
+    depends_on:
+      - kafka  # Depends on Kafka
+      - influxdb  # Depends on InfluxDB for storing ingested data
+    ports:
+      - "8000:8000"  # Expose port 8000 for FastAPI application (data ingestion service)
+    networks:
+      - kafka-net  # Connect to 'kafka-net'
+
+  # This is the Data Preprocessing Service
+  data_preprocessing_service:
+    build:
+      context: ./data_preprocessing  # Specify build context for Dockerfile
+      dockerfile: Dockerfile  # Define Dockerfile location
+    volumes:
+      - ./data_preprocessing:/app  # Mount the data_preprocessing directory to the container
+    environment:
+      KAFKA_BROKER: kafka:9092  # Kafka broker for the preprocessing service
+      INFLUXDB_URL: http://influxdb:8086  # InfluxDB URL for storing preprocessed data
+      INFLUXDB_TOKEN: ...  # This is the token for InfluxDB authentication
+      INFLUXDB_ORG: myorg  # InfluxDB organization name
+      INFLUXDB_BUCKET: mybucket  # InfluxDB bucket to store preprocessed data
+    depends_on:
+      - kafka  # Depends on Kafka
+      - influxdb  # Depends on InfluxDB to store preprocessed data
+    ports:
+      - "8001:8001"  # Expose port 8001 for FastAPI application (preprocessing service)
+    networks:
+      - kafka-net  # Connect to 'kafka-net'
+
+  # This is the Data Aggregation Service
+  data_aggregation:
+    build:
+      context: ./data_aggregation  # Build context for the Dockerfile
+      dockerfile: Dockerfile  # Define Dockerfile location
+    volumes:
+      - ./data_aggregation:/app  # Mount the data_aggregation directory to the container
+    environment:
+      KAFKA_BROKER: kafka:9092  # Kafka broker for the aggregation service
+      INFLUXDB_URL: http://influxdb:8086  # InfluxDB URL for storing aggregated data
+      INFLUXDB_TOKEN: ...  # This is the token for InfluxDB authentication
+      INFLUXDB_ORG: myorg  # InfluxDB organization name
+      INFLUXDB_BUCKET: mybucket  # InfluxDB bucket to store aggregated data
+    depends_on:
+      - kafka  # Depends on Kafka
+      - influxdb  # Depends on InfluxDB to store aggregated data
+    ports:
+      - "8002:8002"  # Expose port 8002 for FastAPI application (aggregation service)
+    networks:
+      - kafka-net  # Connect to 'kafka-net'
+
+  # This is the InfluxDB service for time-series data storage
+  influxdb:
+    image: influxdb:2.0  # Use InfluxDB version 2.0
+    volumes:
+      - ./influxdb_data:/var/lib/influxdb2  # Persistent storage for InfluxDB data to prevent the token from renewing
+    ports:
+      - "8086:8086"  # Expose port 8086 for InfluxDB access
+    environment:
+      INFLUXDB_ADMIN_TOKEN: ...  # Admin token to access InfluxDB
+    networks:
+      - kafka-net  # Connect to 'kafka-net'
+
+  # This is the Grafana service for data visualization
+  grafana:
+    image: grafana/grafana:latest  # Use the latest Grafana image
+    ports:
+      - "3000:3000"  # Expose Grafana on port 3000
+    volumes:
+      - ./grafana_data:/var/lib/grafana  # Persistent storage for Grafana settings and dashboards
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin  # Admin user for Grafana
+      - GF_SECURITY_ADMIN_PASSWORD=admin123  # Admin password for Grafana
+    depends_on:
+      - influxdb  # Grafana depends on InfluxDB for data visualization
+    networks:
+      - kafka-net  # Connect to 'kafka-net'
+
+# This is the Network definition to allow communication between the services
+networks:
+  kafka-net:
+    driver: bridge  # Use a bridge network for inter-service communication
+
