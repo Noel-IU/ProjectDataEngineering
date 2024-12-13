@@ -1,6 +1,5 @@
 # Data Engineering Project Information
 Author Noel Tetteh
-Date 16th September 2024
 
 ## Project Overview
 
